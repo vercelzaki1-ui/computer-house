@@ -18,6 +18,8 @@ import { ProductCard } from '@/components/store/product-card';
 import { useLocale } from '@/lib/locale-context';
 import { getProducts, getDepartments, getBrands } from '@/app/(store)/actions';
 
+export const dynamic = 'force-dynamic';
+
 function formatPrice(price: number) {
   return new Intl.NumberFormat('fr-DZ', {
     style: 'currency',

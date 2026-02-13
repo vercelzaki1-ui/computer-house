@@ -13,6 +13,8 @@ import { Separator } from "@/components/ui/separator"
 import { useLocale } from "@/lib/locale-context"
 import { loginCustomer, type CustomerAuthState } from "../auth-actions"
 
+export const dynamic = 'force-dynamic'
+
 const initialState: CustomerAuthState = {}
 
 export default function LoginPage() {
