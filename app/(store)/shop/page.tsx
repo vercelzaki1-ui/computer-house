@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { Suspense, useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   SlidersHorizontal, Grid3X3, List, X,
@@ -18,8 +18,6 @@ import { ProductCard } from '@/components/store/product-card';
 import { useLocale } from '@/lib/locale-context';
 import { getProducts, getDepartments, getBrands } from '@/app/(store)/actions';
 
-export const dynamic = 'force-dynamic';
-
 function formatPrice(price: number) {
   return new Intl.NumberFormat('fr-DZ', {
     style: 'currency',
@@ -28,7 +26,7 @@ function formatPrice(price: number) {
   }).format(price);
 }
 
-export default function ShopPage() {
+function ShopPageContent() {
   const { locale } = useLocale();
   const searchParams = useSearchParams();
   const [sortBy, setSortBy] = useState('popular');
@@ -375,5 +373,28 @@ export default function ShopPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ShopSkeleton() {
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense fallback={<ShopSkeleton />}>
+      <ShopPageContent />
+    </Suspense>
   );
 }

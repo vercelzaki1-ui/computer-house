@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 /* eslint-disable @next/next/no-img-element */
@@ -10,14 +11,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useLocale } from "@/lib/locale-context"
 import { loginCustomer, type CustomerAuthState } from "../auth-actions"
 
-export const dynamic = 'force-dynamic'
-
 const initialState: CustomerAuthState = {}
 
-export default function LoginPage() {
+function LoginForm() {
   const { t } = useLocale()
   const searchParams = useSearchParams()
   const nextPath = searchParams.get("next") || "/account"
@@ -85,5 +85,34 @@ export default function LoginPage() {
         </div>
       </motion.div>
     </div>
+  )
+}
+
+function LoginSkeleton() {
+  return (
+    <div className="flex min-h-[70vh] items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <div className="mb-8 text-center">
+            <Skeleton className="mx-auto h-10 w-10 rounded-md mb-4" />
+            <Skeleton className="h-8 w-32 mx-auto mb-2" />
+            <Skeleton className="h-4 w-48 mx-auto" />
+          </div>
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginForm />
+    </Suspense>
   )
 }
