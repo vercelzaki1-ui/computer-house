@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit, Trash2, GripVertical, Image as ImageIcon } from "lucide-react"
+import { Plus, Edit, Trash2, GripVertical, Image as ImageIcon, ChevronUp, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,8 +27,11 @@ import {
   getMarqueeBrandsAdmin,
   getAllBrands,
   addBrandToMarquee,
+  addAllBrandsToMarquee,
+  createBrandAdmin,
   removeBrandFromMarquee,
   toggleMarqueeBrandActive,
+  updateMarqueeBrandOrder,
 } from "@/app/admin/content/actions"
 import { toast } from "sonner"
 
@@ -59,8 +62,13 @@ export default function AdminContentPage() {
   const [allBrands, setAllBrands] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isBrandDialogOpen, setIsBrandDialogOpen] = useState(false)
   const [selectedBrandId, setSelectedBrandId] = useState("")
   const [logoUrl, setLogoUrl] = useState("")
+  const [brandName, setBrandName] = useState("")
+  const [brandSlug, setBrandSlug] = useState("")
+  const [brandLogoUrl, setBrandLogoUrl] = useState("")
+  const [brandIsActive, setBrandIsActive] = useState(true)
 
   const loadData = async () => {
     setLoading(true)
@@ -128,6 +136,81 @@ export default function AdminContentPage() {
     }
   }
 
+  const handleMoveBrand = async (id: string, direction: "up" | "down") => {
+    const index = marqueeBrands.findIndex((brand) => brand.id === id)
+    if (index === -1) return
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= marqueeBrands.length) return
+
+    const reordered = [...marqueeBrands]
+    const [moving] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moving)
+
+    setMarqueeBrands(reordered)
+
+    try {
+      await Promise.all(
+        reordered.map((brand, order) => updateMarqueeBrandOrder(brand.id, order))
+      )
+      toast.success("Ordre mis à jour")
+      loadData()
+    } catch (error) {
+      console.error("Failed to reorder marquee brands:", error)
+      toast.error("Échec de la mise à jour de l'ordre")
+      loadData()
+    }
+  }
+
+  const handleCreateBrand = async () => {
+    if (!brandName.trim() || !brandSlug.trim()) {
+      toast.error("Veuillez saisir un nom et un slug")
+      return
+    }
+
+    const result = await createBrandAdmin({
+      name: brandName.trim(),
+      slug: brandSlug.trim(),
+      logo_url: brandLogoUrl.trim() || undefined,
+      is_active: brandIsActive,
+    })
+
+    if (result.error) {
+      toast.error("Échec de la création de la marque")
+    } else {
+      toast.success("Marque créée avec succès")
+      setIsBrandDialogOpen(false)
+      setBrandName("")
+      setBrandSlug("")
+      setBrandLogoUrl("")
+      setBrandIsActive(true)
+      loadData()
+    }
+  }
+
+  const handleBrandNameChange = (value: string) => {
+    setBrandName(value)
+    if (!brandSlug) {
+      const slug = value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+      setBrandSlug(slug)
+    }
+  }
+
+  const handleAddAllBrands = async () => {
+    const result = await addAllBrandsToMarquee()
+    if (result.error) {
+      toast.error("Échec de l'ajout des marques")
+    } else {
+      toast.success("Marques ajoutées avec succès")
+      loadData()
+    }
+  }
+
   // Filter out brands that are already in marquee
   const availableBrands = allBrands.filter(
     (brand) => !marqueeBrands.some((mb) => mb.brand_id === brand.id)
@@ -154,64 +237,130 @@ export default function AdminContentPage() {
                 {marqueeBrands.length !== 1 ? "s" : ""}
               </CardDescription>
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" />
-                  Ajouter une marque
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Ajouter une marque au marquee</DialogTitle>
-                  <DialogDescription>
-                    Sélectionnez une marque à ajouter au bandeau défilant
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Marque</Label>
-                    <Select value={selectedBrandId} onValueChange={setSelectedBrandId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez une marque" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableBrands.length === 0 ? (
-                          <div className="p-2 text-sm text-muted-foreground">
-                            Toutes les marques sont déjà ajoutées
-                          </div>
-                        ) : (
-                          availableBrands.map((brand) => (
-                            <SelectItem key={brand.id} value={brand.id}>
-                              {brand.name}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>URL du logo (optionnel)</Label>
-                    <Input
-                      placeholder="https://..."
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Laissez vide pour utiliser le logo par défaut de la marque
-                    </p>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Annuler
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAddAllBrands}
+                disabled={availableBrands.length === 0}
+              >
+                Ajouter toutes
+              </Button>
+              <Dialog open={isBrandDialogOpen} onOpenChange={setIsBrandDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    Nouvelle marque
                   </Button>
-                  <Button onClick={handleAddBrand} disabled={!selectedBrandId}>
-                    Ajouter
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Creer une marque</DialogTitle>
+                    <DialogDescription>
+                      Ajoutez une nouvelle marque a la base de donnees.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Nom</Label>
+                      <Input
+                        placeholder="Ex: Acer"
+                        value={brandName}
+                        onChange={(e) => handleBrandNameChange(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Slug</Label>
+                      <Input
+                        placeholder="ex: acer"
+                        value={brandSlug}
+                        onChange={(e) => setBrandSlug(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>URL du logo (optionnel)</Label>
+                      <Input
+                        placeholder="https://..."
+                        value={brandLogoUrl}
+                        onChange={(e) => setBrandLogoUrl(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-border p-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Active</p>
+                        <p className="text-xs text-muted-foreground">Visible dans les listes</p>
+                      </div>
+                      <Switch checked={brandIsActive} onCheckedChange={setBrandIsActive} />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsBrandDialogOpen(false)}>
+                      Annuler
+                    </Button>
+                    <Button onClick={handleCreateBrand}>
+                      Creer
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-3.5 w-3.5" />
+                    Ajouter une marque
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Ajouter une marque au marquee</DialogTitle>
+                    <DialogDescription>
+                      Sélectionnez une marque à ajouter au bandeau défilant
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Marque</Label>
+                      <Select value={selectedBrandId} onValueChange={setSelectedBrandId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez une marque" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableBrands.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">
+                              Toutes les marques sont déjà ajoutées
+                            </div>
+                          ) : (
+                            availableBrands.map((brand) => (
+                              <SelectItem key={brand.id} value={brand.id}>
+                                {brand.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>URL du logo (optionnel)</Label>
+                      <Input
+                        placeholder="https://..."
+                        value={logoUrl}
+                        onChange={(e) => setLogoUrl(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Laissez vide pour utiliser le logo par défaut de la marque
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      Annuler
+                    </Button>
+                    <Button onClick={handleAddBrand} disabled={!selectedBrandId}>
+                      Ajouter
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -224,13 +373,30 @@ export default function AdminContentPage() {
               <p className="text-sm text-muted-foreground">
                 Aucune marque configurée
               </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsDialogOpen(true)}
-              >
-                Ajouter la première marque
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddAllBrands}
+                  disabled={availableBrands.length === 0}
+                >
+                  Ajouter toutes les marques
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(true)}
+                >
+                  Ajouter la première marque
+                </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsBrandDialogOpen(true)}
+                  >
+                    Nouvelle marque
+                  </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -238,7 +404,27 @@ export default function AdminContentPage() {
                 <Card key={marqueeBrand.id} className="border-border">
                   <CardContent className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-4">
-                      <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground" />
+                      <div className="flex flex-col items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleMoveBrand(marqueeBrand.id, "up")}
+                          disabled={marqueeBrands[0]?.id === marqueeBrand.id}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <GripVertical className="h-4 w-4 text-muted-foreground" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleMoveBrand(marqueeBrand.id, "down")}
+                          disabled={marqueeBrands[marqueeBrands.length - 1]?.id === marqueeBrand.id}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
                       <div className="flex h-16 w-24 items-center justify-center rounded-lg border border-border bg-white p-2">
                         {marqueeBrand.logo_url || marqueeBrand.brands.logo_url ? (
                           <img

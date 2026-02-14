@@ -36,6 +36,30 @@ export async function getAllBrands() {
   }
 }
 
+export async function createBrandAdmin(data: {
+  name: string;
+  slug: string;
+  logo_url?: string;
+  is_active?: boolean;
+}) {
+  try {
+    const result = await repo.createBrand({
+      name: data.name,
+      slug: data.slug,
+      logo_url: data.logo_url,
+      is_active: data.is_active ?? true,
+    });
+
+    revalidatePath('/admin/content');
+    revalidatePath('/admin/products');
+    revalidatePath('/brands');
+    return { success: true, brand: result };
+  } catch (error: any) {
+    console.error('Failed to create brand:', error);
+    return { error: error.message };
+  }
+}
+
 export async function addBrandToMarquee(brandId: string, logoUrl: string) {
   try {
     // Get current count for sort_order
@@ -86,6 +110,40 @@ export async function toggleMarqueeBrandActive(id: string, isActive: boolean) {
     return { success: true };
   } catch (error: any) {
     console.error('Failed to toggle brand active:', error);
+    return { error: error.message };
+  }
+}
+
+export async function addAllBrandsToMarquee() {
+  try {
+    const [existing, allBrands] = await Promise.all([
+      getMarqueeBrandsAdmin(),
+      getAllBrands(),
+    ]);
+
+    const existingIds = new Set(existing.map((item) => item.brand_id));
+    const missing = allBrands.filter((brand) => !existingIds.has(brand.id));
+
+    if (missing.length === 0) {
+      return { success: true, inserted: 0 };
+    }
+
+    const startOrder = existing.length;
+    const payload = missing.map((brand, index) => ({
+      brand_id: brand.id,
+      logo_url: brand.logo_url || '',
+      sort_order: startOrder + index,
+      is_active: true,
+    }));
+
+    const { error } = await supabaseAdmin.from('marquee_brands').insert(payload);
+    if (error) throw error;
+
+    revalidatePath('/admin/content');
+    revalidatePath('/');
+    return { success: true, inserted: payload.length };
+  } catch (error: any) {
+    console.error('Failed to add all brands to marquee:', error);
     return { error: error.message };
   }
 }

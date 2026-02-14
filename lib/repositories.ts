@@ -1159,6 +1159,111 @@ export async function adminGetOrders(filters?: {
   };
 }
 
+export async function adminGetOrderItemsAnalytics(limit = 5000) {
+  const { data, error } = await supabaseAdmin
+    .from('order_items')
+    .select(
+      `
+      qty,
+      line_total_dzd,
+      products(
+        id,
+        title_fr,
+        title_ar,
+        brands(name)
+      )
+    `
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return {
+    items: data || [],
+  };
+}
+
+export async function adminGetAnalyticsData(filters?: {
+  from?: string;
+  to?: string;
+  status?: string;
+  wilayaCode?: string;
+  brandId?: string;
+  categoryId?: string;
+  departmentId?: string;
+  limit?: number;
+}) {
+  const limit = filters?.limit || 20000;
+
+  let itemsQuery = supabaseAdmin
+    .from('order_items')
+    .select(
+      `
+      order_id,
+      qty,
+      line_total_dzd,
+      created_at,
+      orders!inner(id, status, created_at, wilaya_code, total_dzd),
+      products!inner(
+        id,
+        title_fr,
+        title_ar,
+        brand_id,
+        category_id,
+        department_id,
+        brands(name),
+        categories(name_fr),
+        departments(name_fr)
+      )
+    `
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (filters?.from) itemsQuery = itemsQuery.gte('orders.created_at', filters.from);
+  if (filters?.to) itemsQuery = itemsQuery.lte('orders.created_at', filters.to);
+  if (filters?.status) itemsQuery = itemsQuery.eq('orders.status', filters.status);
+  if (filters?.wilayaCode) itemsQuery = itemsQuery.eq('orders.wilaya_code', filters.wilayaCode);
+  if (filters?.brandId) itemsQuery = itemsQuery.eq('products.brand_id', filters.brandId);
+  if (filters?.categoryId) itemsQuery = itemsQuery.eq('products.category_id', filters.categoryId);
+  if (filters?.departmentId) itemsQuery = itemsQuery.eq('products.department_id', filters.departmentId);
+
+  const { data: orderItems, error: itemsError } = await itemsQuery;
+  if (itemsError) throw itemsError;
+
+  const orderIds = Array.from(
+    new Set((orderItems || []).map((item: any) => item.order_id).filter(Boolean))
+  ) as string[];
+
+  let orders: any[] = [];
+
+  if (orderIds.length > 0 || (!filters?.brandId && !filters?.categoryId && !filters?.departmentId)) {
+    let ordersQuery = supabaseAdmin
+      .from('orders')
+      .select('id, created_at, status, total_dzd, wilaya_code')
+      .order('created_at', { ascending: false });
+
+    if (filters?.from) ordersQuery = ordersQuery.gte('created_at', filters.from);
+    if (filters?.to) ordersQuery = ordersQuery.lte('created_at', filters.to);
+    if (filters?.status) ordersQuery = ordersQuery.eq('status', filters.status);
+    if (filters?.wilayaCode) ordersQuery = ordersQuery.eq('wilaya_code', filters.wilayaCode);
+
+    if (filters?.brandId || filters?.categoryId || filters?.departmentId) {
+      ordersQuery = ordersQuery.in('id', orderIds.length > 0 ? orderIds : ['00000000-0000-0000-0000-000000000000']);
+    }
+
+    const { data: ordersData, error: ordersError } = await ordersQuery;
+    if (ordersError) throw ordersError;
+    orders = ordersData || [];
+  }
+
+  return {
+    orders,
+    orderItems: orderItems || [],
+  };
+}
+
 export async function getOrderById(id: string) {
   const { data, error } = await supabaseAnon
     .from('orders')
@@ -1547,6 +1652,115 @@ export async function upsertCustomerProfile(data: {
   
   if (error) throw error;
   return result;
+}
+
+// ============================================================================
+// ADMIN CUSTOMER OPERATIONS
+// ============================================================================
+
+export async function adminGetCustomers() {
+  const [
+    { data: profiles, error: profilesError },
+    { data: orders, error: ordersError },
+    { data: wilayas, error: wilayasError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from('customer_profiles')
+      .select('id, session_id, first_name, last_name, email, phone, created_at')
+      .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('orders')
+      .select('session_id, total_dzd, created_at, wilaya_code')
+      .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('shipping_wilayas')
+      .select('code, name_fr, name_ar'),
+  ]);
+
+  if (profilesError) throw profilesError;
+  if (ordersError) throw ordersError;
+  if (wilayasError) throw wilayasError;
+
+  const wilayaMap = new Map<number, { name_fr: string; name_ar: string }>();
+  (wilayas || []).forEach((row: any) => {
+    const code = Number(row.code);
+    if (Number.isFinite(code)) {
+      wilayaMap.set(code, {
+        name_fr: row.name_fr || '',
+        name_ar: row.name_ar || '',
+      });
+    }
+  });
+
+  const summaryBySession = new Map<
+    string,
+    {
+      count: number;
+      total: number;
+      lastOrderAt: Date | null;
+      lastWilayaCode: number | null;
+    }
+  >();
+
+  (orders || []).forEach((order: any) => {
+    const sessionId = order.session_id;
+    if (!sessionId) return;
+
+    const entry = summaryBySession.get(sessionId) || {
+      count: 0,
+      total: 0,
+      lastOrderAt: null as Date | null,
+      lastWilayaCode: null as number | null,
+    };
+
+    entry.count += 1;
+
+    const parsedTotal = Number.parseFloat(String(order.total_dzd ?? 0));
+    if (Number.isFinite(parsedTotal)) {
+      entry.total += parsedTotal;
+    }
+
+    const createdAt = order.created_at ? new Date(order.created_at) : null;
+    if (!entry.lastOrderAt || (createdAt && createdAt > entry.lastOrderAt)) {
+      entry.lastOrderAt = createdAt;
+      const wilayaCode = Number(order.wilaya_code);
+      entry.lastWilayaCode = Number.isFinite(wilayaCode) ? wilayaCode : null;
+    }
+
+    summaryBySession.set(sessionId, entry);
+  });
+
+  const customers = (profiles || []).map((profile: any) => {
+    const summary = summaryBySession.get(profile.session_id) || {
+      count: 0,
+      total: 0,
+      lastOrderAt: null,
+      lastWilayaCode: null,
+    };
+
+    const nameParts = [profile.first_name, profile.last_name].filter(Boolean);
+    const name = nameParts.join(' ').trim() || profile.email || 'Client';
+    const wilaya = summary.lastWilayaCode
+      ? wilayaMap.get(summary.lastWilayaCode) || null
+      : null;
+
+    return {
+      id: profile.id,
+      session_id: profile.session_id,
+      name,
+      email: profile.email || '',
+      phone: profile.phone || '',
+      join_date: profile.created_at || null,
+      orders_count: summary.count,
+      total_spent_dzd: summary.total,
+      last_order_at: summary.lastOrderAt ? summary.lastOrderAt.toISOString() : null,
+      wilaya_code: summary.lastWilayaCode,
+      wilaya_name_fr: wilaya?.name_fr || '',
+      wilaya_name_ar: wilaya?.name_ar || '',
+    };
+  });
+
+  return { customers };
 }
 
 export async function deleteMarqueeBrand(id: string) {

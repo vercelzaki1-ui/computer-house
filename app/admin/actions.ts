@@ -765,6 +765,51 @@ export async function adminUpdateOrderStatus(
   }
 }
 
+export async function adminGetOrderItemsAnalytics(limit?: number) {
+  if (!(await isAdminAuthenticated())) {
+    throw new Error('Unauthorized');
+  }
+  try {
+    return await repo.adminGetOrderItemsAnalytics(limit);
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+export async function adminGetAnalyticsData(filters?: {
+  from?: string;
+  to?: string;
+  status?: string;
+  wilayaCode?: string;
+  brandId?: string;
+  categoryId?: string;
+  departmentId?: string;
+}) {
+  if (!(await isAdminAuthenticated())) {
+    throw new Error('Unauthorized');
+  }
+  try {
+    return await repo.adminGetAnalyticsData(filters);
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// ============================================================================
+// CUSTOMERS
+// ============================================================================
+
+export async function adminGetCustomers() {
+  if (!(await isAdminAuthenticated())) {
+    throw new Error('Unauthorized');
+  }
+  try {
+    return await repo.adminGetCustomers();
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
 // ============================================================================
 // SHIPPING
 // ============================================================================

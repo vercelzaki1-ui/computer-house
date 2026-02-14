@@ -1,31 +1,95 @@
 "use client"
 
-import { useState } from "react"
-import { Search, Users, Mail, Phone, MapPin, ShoppingCart } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Search, Users, Mail, Phone, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { formatPrice } from "@/lib/data"
+import { adminGetCustomers } from "@/app/admin/actions"
 
-const customers = [
-  { id: "c1", name: "Mohamed Benali", email: "m.benali@email.com", phone: "0550123456", wilaya: "Alger", orders: 5, totalSpent: 482000, joinDate: "15 Jan 2025", lastOrder: "12 Feb 2026" },
-  { id: "c2", name: "Amina Khelifi", email: "a.khelifi@email.com", phone: "0661234567", wilaya: "Oran", orders: 3, totalSpent: 167000, joinDate: "22 Mar 2025", lastOrder: "12 Feb 2026" },
-  { id: "c3", name: "Yacine Djellal", email: "y.djellal@email.com", phone: "0772345678", wilaya: "Constantine", orders: 8, totalSpent: 735000, joinDate: "05 Nov 2024", lastOrder: "11 Feb 2026" },
-  { id: "c4", name: "Sarah Mansouri", email: "s.mansouri@email.com", phone: "0553456789", wilaya: "Setif", orders: 2, totalSpent: 57000, joinDate: "10 Aug 2025", lastOrder: "11 Feb 2026" },
-  { id: "c5", name: "Karim Laoufi", email: "k.laoufi@email.com", phone: "0664567890", wilaya: "Blida", orders: 6, totalSpent: 523000, joinDate: "01 Jun 2024", lastOrder: "10 Feb 2026" },
-  { id: "c6", name: "Nadia Touati", email: "n.touati@email.com", phone: "0775678901", wilaya: "Tizi Ouzou", orders: 4, totalSpent: 298000, joinDate: "18 Dec 2024", lastOrder: "10 Feb 2026" },
-  { id: "c7", name: "Ali Benmoussa", email: "a.benmoussa@email.com", phone: "0556789012", wilaya: "Annaba", orders: 7, totalSpent: 612000, joinDate: "03 Feb 2025", lastOrder: "09 Feb 2026" },
-  { id: "c8", name: "Fatima Zerrouki", email: "f.zerrouki@email.com", phone: "0667890123", wilaya: "Medea", orders: 1, totalSpent: 18500, joinDate: "28 Jan 2026", lastOrder: "08 Feb 2026" },
-]
+type AdminCustomer = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  wilaya_name_fr: string
+  orders_count: number
+  total_spent_dzd: number
+  join_date: string | null
+  last_order_at: string | null
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "-"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "-"
+  return date.toLocaleDateString("fr-DZ", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+}
 
 export default function AdminCustomersPage() {
   const [search, setSearch] = useState("")
+  const [customers, setCustomers] = useState<AdminCustomer[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadCustomers() {
+      setIsLoading(true)
+      try {
+        const result = await adminGetCustomers()
+        if (!active) return
+        if ("error" in result) {
+          console.error("Failed to load customers:", result.error)
+          setCustomers([])
+          return
+        }
+        setCustomers((result.customers || []) as AdminCustomer[])
+      } catch (error) {
+        if (active) {
+          console.error("Failed to load customers:", error)
+          setCustomers([])
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadCustomers()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const filtered = customers.filter((c) => {
     const q = search.toLowerCase()
-    return !q || c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || c.wilaya.toLowerCase().includes(q)
+    return (
+      !q ||
+      c.name.toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q) ||
+      c.wilaya_name_fr.toLowerCase().includes(q)
+    )
   })
 
   return (
@@ -54,68 +118,84 @@ export default function AdminCustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((customer) => (
-                <tr key={customer.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                        {customer.name.split(" ").map((n) => n[0]).join("")}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{customer.name}</p>
-                        <p className="text-xs text-muted-foreground">{customer.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-foreground">{customer.wilaya}</td>
-                  <td className="px-4 py-3">
-                    <Badge className="bg-primary/10 text-primary">{customer.orders}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-foreground">{formatPrice(customer.totalSpent)}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{customer.lastOrder}</td>
-                  <td className="px-4 py-3 text-end">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-primary">
-                          <Users className="h-3.5 w-3.5" />
-                          Details
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle className="font-heading">{customer.name}</DialogTitle>
-                        </DialogHeader>
-                        <div className="flex flex-col gap-4 pt-2">
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            <Mail className="h-4 w-4 text-primary" /> {customer.email}
+              {isLoading
+                ? Array.from({ length: 6 }).map((_, index) => (
+                    <tr key={index} className="border-b border-border last:border-0">
+                      <td className="px-4 py-4" colSpan={6}>
+                        <Skeleton className="h-10 w-full" />
+                      </td>
+                    </tr>
+                  ))
+                : filtered.map((customer) => (
+                    <tr key={customer.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                            {getInitials(customer.name)}
                           </div>
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            <Phone className="h-4 w-4 text-primary" /> {customer.phone}
-                          </div>
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4 text-primary" /> {customer.wilaya}
-                          </div>
-                          <Separator />
-                          <div className="grid grid-cols-3 gap-4 text-center">
-                            <div className="rounded-lg bg-muted p-3">
-                              <p className="text-lg font-bold text-foreground">{customer.orders}</p>
-                              <p className="text-xs text-muted-foreground">Commandes</p>
-                            </div>
-                            <div className="rounded-lg bg-muted p-3">
-                              <p className="text-lg font-bold text-foreground">{formatPrice(customer.totalSpent)}</p>
-                              <p className="text-xs text-muted-foreground">Total</p>
-                            </div>
-                            <div className="rounded-lg bg-muted p-3">
-                              <p className="text-sm font-bold text-foreground">{customer.joinDate}</p>
-                              <p className="text-xs text-muted-foreground">Inscrit</p>
-                            </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{customer.name}</p>
+                            <p className="text-xs text-muted-foreground">{customer.email || "-"}</p>
                           </div>
                         </div>
-                      </DialogContent>
-                    </Dialog>
-                  </td>
-                </tr>
-              ))}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-foreground">{customer.wilaya_name_fr || "-"}</td>
+                      <td className="px-4 py-3">
+                        <Badge className="bg-primary/10 text-primary">{customer.orders_count}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-foreground">
+                        {formatPrice(customer.total_spent_dzd || 0)}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {formatDate(customer.last_order_at)}
+                      </td>
+                      <td className="px-4 py-3 text-end">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="gap-1.5 text-primary">
+                              <Users className="h-3.5 w-3.5" />
+                              Details
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-md">
+                            <DialogHeader>
+                              <DialogTitle className="font-heading">{customer.name}</DialogTitle>
+                            </DialogHeader>
+                            <div className="flex flex-col gap-4 pt-2">
+                              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <Mail className="h-4 w-4 text-primary" /> {customer.email || "-"}
+                              </div>
+                              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <Phone className="h-4 w-4 text-primary" /> {customer.phone || "-"}
+                              </div>
+                              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <MapPin className="h-4 w-4 text-primary" /> {customer.wilaya_name_fr || "-"}
+                              </div>
+                              <Separator />
+                              <div className="grid grid-cols-3 gap-4 text-center">
+                                <div className="rounded-lg bg-muted p-3">
+                                  <p className="text-lg font-bold text-foreground">{customer.orders_count}</p>
+                                  <p className="text-xs text-muted-foreground">Commandes</p>
+                                </div>
+                                <div className="rounded-lg bg-muted p-3">
+                                  <p className="text-lg font-bold text-foreground">
+                                    {formatPrice(customer.total_spent_dzd || 0)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">Total</p>
+                                </div>
+                                <div className="rounded-lg bg-muted p-3">
+                                  <p className="text-sm font-bold text-foreground">
+                                    {formatDate(customer.join_date)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">Inscrit</p>
+                                </div>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </td>
+                    </tr>
+                  ))}
             </tbody>
           </table>
         </div>

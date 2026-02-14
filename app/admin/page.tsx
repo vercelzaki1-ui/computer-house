@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DashboardCharts } from "./dashboard-charts"
-import { adminGetOrders, adminGetProducts } from "@/app/admin/actions"
+import { MarketCharts } from "./market-charts"
+import { adminGetOrders, adminGetProducts, adminGetOrderItemsAnalytics, adminGetWilayas } from "@/app/admin/actions"
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat('fr-DZ', {
@@ -28,6 +29,7 @@ type DashboardOrder = {
   order_number?: string
   created_at?: string
   status?: string
+  wilaya_code?: number | string
   total_dzd?: number | string | null
   total?: number | string | null
 }
@@ -37,6 +39,16 @@ type DashboardProduct = {
   stock: number
   title_fr?: string
   sku?: string | null
+}
+
+type OrderItemRow = {
+  qty: number
+  line_total_dzd: number
+  products?: {
+    title_fr?: string | null
+    title_ar?: string | null
+    brands?: { name?: string | null } | null
+  } | null
 }
 
 const statusColors: Record<string, string> = {
@@ -59,13 +71,17 @@ const statusLabels: Record<string, string> = {
 
 export default async function AdminDashboard() {
   try {
-    const [ordersData, productsData] = await Promise.all([
+    const [ordersData, productsData, orderItemsData, wilayasData] = await Promise.all([
       adminGetOrders({ limit: 1000 }),
-      adminGetProducts({ limit: 1000 })
+      adminGetProducts({ limit: 1000 }),
+      adminGetOrderItemsAnalytics(5000),
+      adminGetWilayas(),
     ])
 
     const orders: DashboardOrder[] = "error" in ordersData ? [] : (ordersData.orders || [])
     const allProducts: DashboardProduct[] = "error" in productsData ? [] : (productsData.products || [])
+    const orderItems: OrderItemRow[] = "error" in orderItemsData ? [] : (orderItemsData.items || [])
+    const wilayas = "error" in wilayasData ? [] : (wilayasData || [])
     const lowStockProducts = allProducts.filter((p) => p.stock <= 10).sort((a, b) => a.stock - b.stock)
     
     const totalRevenue = orders.reduce((sum, order) => sum + getOrderTotalDzd(order), 0)
@@ -130,6 +146,57 @@ export default async function AdminDashboard() {
     })
 
     const recentOrders = orders.slice(0, 6)
+
+    const brandAgg = new Map<string, { qty: number; revenue: number }>()
+    const productAgg = new Map<string, { qty: number; revenue: number }>()
+
+    for (const item of orderItems) {
+      const qty = Number(item.qty || 0)
+      const revenue = Number.parseFloat(String(item.line_total_dzd || 0)) || 0
+      const productName = item.products?.title_fr || item.products?.title_ar || "Produit"
+      const brandName = item.products?.brands?.name || "Sans marque"
+
+      const brandEntry = brandAgg.get(brandName) || { qty: 0, revenue: 0 }
+      brandEntry.qty += qty
+      brandEntry.revenue += revenue
+      brandAgg.set(brandName, brandEntry)
+
+      const productEntry = productAgg.get(productName) || { qty: 0, revenue: 0 }
+      productEntry.qty += qty
+      productEntry.revenue += revenue
+      productAgg.set(productName, productEntry)
+    }
+
+    const topBrands = Array.from(brandAgg.entries())
+      .map(([name, stats]) => ({ name, qty: stats.qty, revenue: stats.revenue }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 6)
+
+    const topProducts = Array.from(productAgg.entries())
+      .map(([name, stats]) => ({ name, qty: stats.qty, revenue: stats.revenue }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 6)
+
+    const wilayaMap = new Map<number, string>()
+    wilayas.forEach((wilaya: any) => {
+      const code = Number(wilaya.code)
+      if (Number.isFinite(code)) {
+        wilayaMap.set(code, wilaya.name_fr || "")
+      }
+    })
+
+    const revenueByWilayaMap = new Map<string, number>()
+    for (const order of orders) {
+      const code = Number(order.wilaya_code)
+      const name = wilayaMap.get(code) || "Inconnu"
+      const revenue = getOrderTotalDzd(order)
+      revenueByWilayaMap.set(name, (revenueByWilayaMap.get(name) || 0) + revenue)
+    }
+
+    const revenueByWilaya = Array.from(revenueByWilayaMap.entries())
+      .map(([name, revenue]) => ({ name, revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 6)
 
     return (
       <div className="flex flex-col gap-6">
@@ -203,6 +270,13 @@ export default async function AdminDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Market insights */}
+        <MarketCharts
+          topBrands={topBrands}
+          topProducts={topProducts}
+          revenueByWilaya={revenueByWilaya}
+        />
 
         {/* Recent Orders + Low Stock */}
         <div className="grid gap-4 lg:grid-cols-3">

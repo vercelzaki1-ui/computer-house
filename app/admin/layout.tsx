@@ -1,18 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 /* eslint-disable @next/next/no-img-element */
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Truck,
   FileText, Settings, Menu, X, LogOut,
-  Bell, Search, Tags, MessageSquare,
+  Bell, Search, Tags, MessageSquare, BarChart3,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { logoutAdmin } from "@/app/admin/actions"
+import { adminGetOrders, logoutAdmin } from "@/app/admin/actions"
 
 function LogoutButton() {
   const handleLogout = async () => {
@@ -37,6 +37,7 @@ const sidebarLinks = [
   { href: "/admin/products", icon: Package, label: "Produits" },
   { href: "/admin/categories", icon: Tags, label: "Catégories" },
   { href: "/admin/orders", icon: ShoppingCart, label: "Commandes" },
+  { href: "/admin/analytics", icon: BarChart3, label: "Analyses" },
   { href: "/admin/customers", icon: Users, label: "Clients" },
   { href: "/admin/messages", icon: MessageSquare, label: "Messages" },
   { href: "/admin/shipping", icon: Truck, label: "Livraison" },
@@ -47,6 +48,35 @@ const sidebarLinks = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [ordersCount, setOrdersCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadOrdersCount() {
+      try {
+        const result = await adminGetOrders({ limit: 1 })
+        if (!active) return
+        if ("error" in result) {
+          console.error("Failed to load orders count:", result.error)
+          setOrdersCount(null)
+          return
+        }
+        setOrdersCount(result.total || 0)
+      } catch (error) {
+        if (active) {
+          console.error("Failed to load orders count:", error)
+          setOrdersCount(null)
+        }
+      }
+    }
+
+    loadOrdersCount()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -112,9 +142,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 >
                   <link.icon className="h-4.5 w-4.5 shrink-0" />
                   {link.label}
-                  {link.label === "Commandes" && (
+                  {link.label === "Commandes" && ordersCount !== null && (
                     <Badge className="ms-auto h-5 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
-                      12
+                      {ordersCount}
                     </Badge>
                   )}
                 </Link>
