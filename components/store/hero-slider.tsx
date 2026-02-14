@@ -27,7 +27,7 @@ const slides: SlideData[] = [
     subtitleAr: "أصلية بأفضل الأسعار",
     badgeFr: "Garantie officielle",
     badgeAr: "ضمان رسمي",
-    imageSrc: "https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=1920&q=90",
+    imageSrc: "https://tse2.mm.bing.net/th/id/OIP.RqDIPsG5aUfGH01xhj5dzgAAAA?w=474&h=316&rs=1&pid=ImgDetMain&o=7&rm=3,",
     ctaFr: "Découvrir",
     ctaAr: "اكتشف"
   },
