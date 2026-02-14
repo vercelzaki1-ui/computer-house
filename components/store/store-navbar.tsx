@@ -386,7 +386,10 @@ export function StoreNavbar() {
             <Link href="/shop" className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
               {t.nav.shop}
             </Link>
-            <Link href="/deals" className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+            <Link href="/brands" className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+              {t.nav.brands}
+            </Link>
+            <Link href="/promotions" className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
               {t.nav.deals}
             </Link>
             <Link href="/build-your-pc" className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
@@ -467,7 +470,10 @@ export function StoreNavbar() {
                 <Link href="/shop" className="block rounded-md px-3 py-2.5 text-sm font-medium hover:bg-muted" onClick={() => setMobileOpen(false)}>
                   {t.nav.shop}
                 </Link>
-                <Link href="/deals" className="block rounded-md px-3 py-2.5 text-sm font-medium hover:bg-muted" onClick={() => setMobileOpen(false)}>
+                <Link href="/brands" className="block rounded-md px-3 py-2.5 text-sm font-medium hover:bg-muted" onClick={() => setMobileOpen(false)}>
+                  {t.nav.brands}
+                </Link>
+                <Link href="/promotions" className="block rounded-md px-3 py-2.5 text-sm font-medium hover:bg-muted" onClick={() => setMobileOpen(false)}>
                   {t.nav.deals}
                 </Link>
                 <Link

@@ -109,6 +109,26 @@ function ShopPageContent() {
     }
   }, [departments, searchParams]);
 
+  useEffect(() => {
+    if (brands.length === 0) return;
+
+    const brandParam = searchParams.get('brand');
+    if (!brandParam) return;
+
+    const tokens = brandParam
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const matchedIds = tokens
+      .map((token) => brands.find((brand) => brand.id === token || brand.slug === token)?.id)
+      .filter(Boolean) as string[];
+
+    if (matchedIds.length > 0) {
+      setSelectedBrands(Array.from(new Set(matchedIds)));
+    }
+  }, [brands, searchParams]);
+
   const filtered = useMemo(() => {
     let result = [...products];
     if (selectedDept) {
